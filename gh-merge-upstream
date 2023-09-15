@@ -1,0 +1,289 @@
+#! /usr/bin/env bash
+
+declare bn0 branch in_git \
+  origin origin_host origin_repo origin_url \
+  upstream upstream_host upstream_repo upstream_url
+bn0="$(basename "$0")"
+origin=
+upstream=
+in_git=false
+
+declare -a remotes args
+declare -A remote_urls
+
+readonly user_re='[^:@]+'
+readonly pass_re='[^@]+'
+readonly host_re='[^:/?#]+'
+readonly port_re='[0-9]+'
+readonly path_re='/([^?#]*)'
+readonly query_re='\?([^#]+)'
+readonly fragment_re='#(.*)'
+readonly auth_re="(${user_re})(:(${pass_re}))?@"
+readonly connection_re="(${auth_re})?(${host_re})(:(${port_re}))?"
+readonly url_re="^https://${connection_re}(${path_re})?(${query_re})?(${fragment_re})?"
+readonly ssh_re="^ssh://git@([^:]+)(:(${port_re}))?/(.*)$"
+readonly scp_re="^git@([^:]+):(.*)$"
+
+if git rev-parse --is-inside-work-tree 2>/dev/null 1>/dev/null; then
+  in_git=true
+fi
+
+usage() {
+  cat <<USAGE
+Usage: gh-merge-upstream [options] [TARGET_REPO]
+
+Uses the GitHub API to update your fork of a repository to the current
+state of the parent repository.
+
+If TARGET_REPO is not provided and gh-merge-upstream is run in a Git
+repository, it will be set from the 'origin' remote.
+
+Options
+
+  -b, --branch BRANCH   The name of the branch to use for updating your
+                        fork. Defaults to the 'upstream' repository
+                        default branch.
+
+  -o, --origin NAME     The name of the remote in the current git repo
+  --mine NAME           to use for discovering TARGET_REPO. Defaults to
+                        'origin'.
+
+  -u, --upstream NAME   The remote, repo name, or URL for the parent
+  --theirs NAME         repository and used only when '--branch' is not
+                        provided. Defaults 'upstream' of the current git
+                        repo.
+USAGE
+}
+
+halt-error() {
+  local call_usage
+  call_usage=false
+
+  if [[ "${1:-}" == --usage ]]; then
+    call_usage=true
+    shift
+  fi
+
+  echo >&2 "${bn0}: $*"
+  "${call_usage}" && usage >&2
+  exit 1
+}
+
+parse-repo-path() {
+  if [[ "$1" =~ ^([^/]+)/([^/]+)(/.*)?$ ]]; then
+    echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]/.git/}"
+  else
+    echo "invalid repo path: $1"
+    return 1
+  fi
+}
+
+get-repo-from-url() {
+  parse-repo-url "$1" repo
+}
+
+get-host-from-url() {
+  parse-repo-url "$1" host
+}
+
+parse-repo-url() {
+  local url url_part host repo
+  url="$1"
+  url_part="$2"
+
+  if [[ "${url}" =~ ${url_re} ]]; then
+    if [[ -z "${BASH_REMATCH[5]}" ]] || [[ -z "${BASH_REMATCH[9]}" ]]; then
+      # Missing host and/or path
+      echo "invalid URL: ${url}"
+      return 1
+    fi
+
+    if [[ "${BASH_REMATCH[5]}" == github.com ]]; then
+      host=
+    else
+      host="${BASH_REMATCH[5]}${BASH_REMATCH[6]}"
+    fi
+
+    if ! repo="$(parse-repo-path "${BASH_REMATCH[9]}")"; then
+      echo "${repo}"
+      return 1
+    fi
+  elif [[ "${url}" =~ ${ssh_re} ]]; then
+    if [[ -z "${BASH_REMATCH[1]}" ]] || [[ -z "${BASH_REMATCH[4]}" ]]; then
+      echo "invalid URL: ${url}"
+      return 1
+    fi
+
+    host="${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
+
+    if ! repo="$(parse-repo-path "${BASH_REMATCH[4]}")"; then
+      return 1
+    fi
+  elif [[ "${url}" =~ ${scp_re} ]]; then
+    if [[ -z "${BASH_REMATCH[1]}" ]] || [[ -z "${BASH_REMATCH[2]}" ]]; then
+      echo "invalid URL: ${url}"
+      return 1
+    fi
+
+    host="${BASH_REMATCH[1]}"
+    if ! repo="$(parse-repo-path "${BASH_REMATCH[2]}")"; then
+      return 1
+    fi
+  else
+    echo "invalid URL: ${url}"
+    return 1
+  fi
+
+  case "${url_part}" in
+  host) echo "${host}" ;;
+  repo) echo "${repo}" ;;
+  *)
+    echo "invalid URL part: ${url_part}"
+    return 1
+    ;;
+  esac
+}
+
+while (($#)); do
+  case "$1" in
+  -o | --origin | --mine)
+    if [[ -z "$2" ]]; then
+      halt-error "$1 requires a value"
+    fi
+
+    origin="$2"
+    shift
+    ;;
+  -u | --upstream | --theirs)
+    if [[ -z "$2" ]]; then
+      halt-error "$1 requires a value"
+    fi
+
+    upstream="$2"
+    shift
+    ;;
+  -b | --branch)
+    if [[ -z "$2" ]]; then
+      halt-error "$1 requires a value"
+    fi
+
+    branch="$2"
+    shift
+    ;;
+  *)
+    args+=("$1")
+    ;;
+  esac
+
+  shift
+done
+
+set -- "${args[@]}"
+
+case "${1:-}" in
+git@* | ssh://* | https://*)
+  if ! origin_repo="$(get-repo-from-url "$1")"; then
+    halt-error "${origin_repo}"
+  fi
+
+  origin_host="$(get-host-from-url "$1")"
+  origin_url="$1"
+  ;;
+'') : ;;
+*)
+  if ! origin_repo="$(parse-repo-path "$1")"; then
+    halt-error "${origin_repo}"
+  fi
+  ;;
+esac
+
+if [[ "${in_git}" ]]; then
+  readarray -t remotes < <(git remote)
+
+  for remote in "${remotes[@]}"; do
+    remote_urls["${remote}"]="$(git remote get-url "${remote}")"
+  done
+fi
+
+if [[ -n "${origin_repo}" ]] && [[ -n "${origin}" ]]; then
+  echo >&2 "warning: fork repo specified (${origin_repo}), ignoring origin (${origin})"
+elif [[ -z "${origin_repo}" ]]; then
+  if "${in_git}" && [[ -z "${origin}" ]]; then
+    origin=origin
+  fi
+
+  if origin_repo="$(get-repo-from-url "${origin}")"; then
+    origin_host="$(get-host-from-url "${origin}")"
+    origin_url="${origin}"
+  elif origin_repo="$(parse-repo-path "${origin}")"; then
+    :
+  else
+    if ! "${in_git}"; then
+      halt-error "target repo not specified and not in git for origin resolution"
+    fi
+
+    origin_url="${remote_urls["${origin}"]}"
+
+    if [[ -z "${origin_url}" ]]; then
+      halt-error "origin remote '${origin}' does not exist in git repo"
+    fi
+
+    if ! origin_repo="$(get-repo-from-url "${origin_url}")"; then
+      halt-error "origin remote: ${origin_repo}"
+    fi
+
+    origin_host="$(get-host-from-url "${origin_url}")"
+  fi
+fi
+
+if [[ -z "${branch}" ]]; then
+  if "${in_git}" && [[ -z "${upstream}" ]]; then
+    upstream=upstream
+  fi
+
+  if upstream_repo="$(get-repo-from-url "${upstream}")"; then
+    upstream_host="$(get-host-from-url "${upstream}")"
+    upstream_url="${upstream}"
+  elif upstream_repo="$(parse-repo-path "${upstream}")"; then
+    :
+  else
+    if ! "${in_git}"; then
+      halt-error "upstream repo not specified and not in git for upstream resolution"
+    fi
+
+    upstream_url="${remote_urls["${upstream}"]}"
+
+    if [[ -z "${upstream_url}" ]]; then
+      halt-error "upstream remote '${upstream}' does not exist in git repo"
+    fi
+
+    if ! upstream_repo="$(get-repo-from-url "${upstream_url}")"; then
+      halt-error "upstream remote: ${upstream_repo}"
+    fi
+
+    upstream_host="$(get-host-from-url "${upstream_url}")"
+  fi
+
+  args=()
+
+  if [[ -n "${upstream_host}" ]] && [[ "${upstream_host}" != github.com ]]; then
+    args=(--hostname "${upstream_host}")
+  fi
+
+  # Get the default branch from the upstream
+  if ! branch="$(gh "${args[@]}" api repos/"${upstream_repo}" --template '{{ .default_branch }}')"; then
+    halt-error "could not get default branch from ${upstream_repo}"
+  fi
+
+  if [[ -z "${branch}" ]]; then
+    halt-error "could not get default branch from ${upstream_repo}"
+  fi
+fi
+
+args=()
+
+if [[ -n "${origin_host}" ]] && [[ "${origin_host}" != github.com ]]; then
+  args=(--hostname "${origin_host}")
+fi
+
+exec gh "${args[@]}" api repos/"${origin_repo}"/merge-upstream -F branch="${branch}"
