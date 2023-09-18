@@ -51,3 +51,8 @@ The name of the remote (`upstream`), shorthand repository name (`owner/repo`),
 or repository URL (`https://github.com/owner/repo`) for the parent repository
 and used only when `--branch` is not provided. Defaults `upstream` of the
 current git repo.
+
+## Contributors
+
+- Austin Ziegler (@halostatue) created gh-merge-upstream.
+- George L. Yermulnik (@yermulnik)

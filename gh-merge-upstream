@@ -64,7 +64,8 @@ halt-error() {
     shift
   fi
 
-  [[ $@ ]] && echo >&2 "${bn0}: $*"
+  [[ $@ ]] || set -- error
+  echo >&2 "${bn0}: $*"
   "${call_usage}" && usage >&2
   exit 1
 }
@@ -171,7 +172,8 @@ while (($#)); do
     shift
     ;;
   -h | --help | --usage)
-    halt-error --usage
+    usage
+    exit 0
     ;;
   *)
     args+=("$1")
@@ -204,8 +206,7 @@ if [[ "${in_git}" ]]; then
   readarray -t remotes < <(git remote)
 
   for remote in "${remotes[@]}"; do
-    #remote_urls["${remote}"]="$(git remote get-url "${remote}")"
-    # workaround "insteadOf" by querying local config
+    # workaround "url.<base>.insteadOf" mapping by querying local config
     remote_urls["${remote}"]="$(git config --get remote."${remote}".url)"
   done
 fi
