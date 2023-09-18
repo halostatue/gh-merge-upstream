@@ -12,6 +12,12 @@ gh api repos/TARGET_REPO/merge-upstream -F branch=UPSTREAM_BRANCH
 If there are insufficient permissions for your token, `gh api` will advise the
 correct action to take.
 
+## Installation
+
+```sh
+gh extension install halostatue/gh-merge-upstream
+```
+
 ## Usage
 
 `gh-merge-upstream` works best and easiest if you are in a local clone of the
@@ -45,3 +51,8 @@ The name of the remote (`upstream`), shorthand repository name (`owner/repo`),
 or repository URL (`https://github.com/owner/repo`) for the parent repository
 and used only when `--branch` is not provided. Defaults `upstream` of the
 current git repo.
+
+## Contributors
+
+- Austin Ziegler ([@halostatue](https://github.com/halostatue)) created gh-merge-upstream.
+- George L. Yermulnik ([@yermulnik](https://github.com/yermulnik))

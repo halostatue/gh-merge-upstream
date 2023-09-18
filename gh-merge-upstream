@@ -30,7 +30,7 @@ fi
 
 usage() {
   cat <<USAGE
-Usage: gh-merge-upstream [options] [TARGET_REPO]
+Usage: ${bn0} [options] [TARGET_REPO]
 
 Uses the GitHub API to update your fork of a repository to the current
 state of the parent repository.
@@ -64,6 +64,7 @@ halt-error() {
     shift
   fi
 
+  [[ $@ ]] || set -- error
   echo >&2 "${bn0}: $*"
   "${call_usage}" && usage >&2
   exit 1
@@ -170,6 +171,10 @@ while (($#)); do
     branch="$2"
     shift
     ;;
+  -h | --help | --usage)
+    usage
+    exit 0
+    ;;
   *)
     args+=("$1")
     ;;
@@ -201,7 +206,8 @@ if [[ "${in_git}" ]]; then
   readarray -t remotes < <(git remote)
 
   for remote in "${remotes[@]}"; do
-    remote_urls["${remote}"]="$(git remote get-url "${remote}")"
+    # workaround "url.<base>.insteadOf" mapping by querying local config
+    remote_urls["${remote}"]="$(git config --get remote."${remote}".url)"
   done
 fi
 
