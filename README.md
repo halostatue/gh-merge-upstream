@@ -54,5 +54,5 @@ current git repo.
 
 ## Contributors
 
-- Austin Ziegler (@halostatue) created gh-merge-upstream.
-- George L. Yermulnik (@yermulnik)
+- Austin Ziegler ([@halostatue](https://github.com/halostatue)) created gh-merge-upstream.
+- George L. Yermulnik ([@yermulnik](https://github.com/yermulnik))
