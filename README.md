@@ -12,6 +12,12 @@ gh api repos/TARGET_REPO/merge-upstream -F branch=UPSTREAM_BRANCH
 If there are insufficient permissions for your token, `gh api` will advise the
 correct action to take.
 
+## Installation
+
+```sh
+gh extension install halostatue/gh-merge-upstream
+```
+
 ## Usage
 
 `gh-merge-upstream` works best and easiest if you are in a local clone of the
