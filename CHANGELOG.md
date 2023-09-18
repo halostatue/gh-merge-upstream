@@ -1,7 +1,7 @@
 # gh-merge-upstream
 
 ## 1.0.1 / 2023-09-18
-- Add installation instruction to [`README`](./README)
+- Add installation instruction to [`README`](./README.md)
 - `usage()`: use variable instead of hardcoded tool name
 - `halt-error()`: print diagnostic only if there are still items in `$@`
 - Add `-h | --help | --usage` into cmdline argument parser loop
