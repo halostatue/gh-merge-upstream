@@ -32,6 +32,9 @@ usage() {
   cat <<USAGE
 Usage: ${bn0} [options] [TARGET_REPO]
 
+NOTICE: This gh extension is deprecated because 'gh repo sync' does
+the same thing.
+
 Uses the GitHub API to update your fork of a repository to the current
 state of the parent repository.
 
@@ -291,5 +294,8 @@ args=()
 if [[ -n "${origin_host}" ]] && [[ "${origin_host}" != github.com ]]; then
   args=(--hostname "${origin_host}")
 fi
+
+echo >&2 "NOTICE: This could have been replaced with:"
+echo >&2 "    gh repo sync ${origin_repo} --branch ${branch}"
 
 exec gh "${args[@]}" api repos/"${origin_repo}"/merge-upstream -F branch="${branch}"
