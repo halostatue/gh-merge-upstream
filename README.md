@@ -1,5 +1,11 @@
 # gh-merge-upstream
 
+> [!NOTICE]
+>
+> This repository has been archived because this extension is not necessary —
+> and may not have even been necessary when I wrote it. Instead of using this,
+> I strongly recommend using `gh repo sync`. 
+
 Uses the GitHub API to update your fork of a repository to the current state of
 the parent repository.
 
